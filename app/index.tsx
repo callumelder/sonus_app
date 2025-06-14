@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
+// import GoogleAuth from '../components/googleauth';
 
 const VoiceInterface = () => {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
