@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Animated, TouchableOpacity, SafeAreaView, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import GoogleAuth from '../components/googleauth'
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const VoiceInterface = () => {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -21,9 +20,9 @@ const VoiceInterface = () => {
 
 
   // useEffect(() => {
-  if (showAuth) {
-    <GoogleAuth />
-  }
+  // if (showAuth) {
+  //   <GoogleAuth />
+  // }
   // }, [])
 
   // Initialize WebSocket connection
