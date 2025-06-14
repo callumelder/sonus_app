@@ -1,9 +1,9 @@
-import React from 'react'
 import {
   GoogleSignin,
   GoogleSigninButton,
   statusCodes,
 } from '@react-native-google-signin/google-signin'
+import React from 'react'
 import { supabase } from '../utils/supabase'
 
 export default function GoogleAuth() {
@@ -23,7 +23,6 @@ export default function GoogleAuth() {
         try {
           await GoogleSignin.hasPlayServices()
           const userInfo = await GoogleSignin.signIn()
-          console.log('Full userInfo:', userInfo) // Debug log
           
           if (userInfo.data && userInfo.data.idToken) {
             const { data, error } = await supabase.auth.signInWithIdToken({
