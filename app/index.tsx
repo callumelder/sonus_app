@@ -2,12 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import GoogleAuth from '../components/googleauth';
+import SignInOverlay from '../components/signinoverlay';
+import { supabase } from '../utils/supabase';
 
 const VoiceInterface = () => {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const meterInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnimation = useRef<Animated.CompositeAnimation | null>(null);
@@ -24,94 +28,107 @@ const VoiceInterface = () => {
     throw new Error('Missing WebSocket URL. Please check your .env file for EXPO_PUBLIC_WEBSOCKET_URL.');
   }
 
+  // Check auth status on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsAuthenticated(true);
+      } else {
+        setShowSignIn(true);
+      }
+    };
+    
+    checkAuth();
+  }, []);
 
-  // useEffect(() => {
-  // if (showAuth) {
-  //   console.log('Google authenticating');
-  //   <GoogleAuth />
-  //   console.log('Google authentication finished');
-  // }
-  // }, [])
+  const handleSignInSuccess = () => {
+    setIsAuthenticated(true);
+    setShowSignIn(false);
+  };
 
-  // Initialize WebSocket connection
-  // useEffect(() => {
-  //   console.log('Connecting websocket...')
-  //   ws.current = new WebSocket(WEBSOCKET_URL);
+  // Initialize WebSocket connection - only if authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    ws.current = new WebSocket(WEBSOCKET_URL);
   
-  //   ws.current.onopen = () => {
-  //     console.log('WebSocket Connected');
+    ws.current.onopen = () => {
+      console.log('WebSocket Connected');
       
-  //     // Signal that we're ready to start a conversation
-  //     if (ws.current?.readyState === WebSocket.OPEN) {
-  //       ws.current.send(JSON.stringify({
-  //         type: "start_conversation"
-  //       }));
-  //     }
-  //   };
+      // Signal that we're ready to start a conversation
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
+          type: "start_conversation"
+        }));
+      }
+    };
   
-  //   ws.current.onclose = () => {
-  //     console.log('WebSocket Disconnected');
-  //     setIsListening(false);
-  //   };
+    ws.current.onclose = () => {
+      console.log('WebSocket Disconnected');
+      setIsListening(false);
+    };
   
-  //   ws.current.onerror = (error) => {
-  //     console.error('WebSocket Error:', error);
-  //     setIsListening(false);
-  //     // Close the connection if it's still open
-  //     if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
-  //       ws.current.close();
-  //     }
-  //   };
+    ws.current.onerror = (error) => {
+      console.error('WebSocket Error:', error);
+      setIsListening(false);
+      // Close the connection if it's still open
+      if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
+        ws.current.close();
+      }
+    };
   
-  //   ws.current.onmessage = (event) => {
-  //     try {
-  //       const data = JSON.parse(event.data);
+    ws.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
         
-  //       // Log the message type but not the full data content for audio responses
-  //       if (data.type === 'audio_response') {
-  //         console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
-  //       } else {
-  //         console.log('[WebSocket] Received:', data);
-  //       }
+        // Log the message type but not the full data content for audio responses
+        if (data.type === 'audio_response') {
+          console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
+        } else {
+          console.log('[WebSocket] Received:', data);
+        }
         
-  //       // Handle different message types
-  //       switch (data.type) {
-  //         case "start_listening":
-  //           console.log('[WebSocket] Received command to start listening');
-  //           startRecording();
-  //           break;
+        // Handle different message types
+        switch (data.type) {
+          case "start_listening":
+            console.log('[WebSocket] Received command to start listening');
+            startRecording();
+            break;
             
-  //         case "stop_listening":
-  //           console.log('[WebSocket] Received command to stop listening');
-  //           stopRecording();
-  //           stopSpeechProcessor();
-  //           break;
+          case "stop_listening":
+            console.log('[WebSocket] Received command to stop listening');
+            stopRecording();
+            stopSpeechProcessor();
+            break;
             
-  //         case "audio_response":
-  //           // Handle incoming audio data for playback
-  //           console.log(`[WebSocket] Received audio data of size: ${data.size || 'unknown'} bytes`);
-  //           if (data.data && data.data.length > 0) {
-  //             handleAudioResponse(data);
-  //           } else {
-  //             console.warn('[WebSocket] Received empty audio data');
-  //           }
-  //           break;
-  //       }
-  //     } catch (error) {
-  //       console.error('[WebSocket] Error processing message:', error);
-  //     }
-  //   };
+          case "audio_response":
+            // Handle incoming audio data for playback
+            console.log(`[WebSocket] Received audio data of size: ${data.size || 'unknown'} bytes`);
+            if (data.data && data.data.length > 0) {
+              handleAudioResponse(data);
+            } else {
+              console.warn('[WebSocket] Received empty audio data');
+            }
+            break;
+        }
+      } catch (error) {
+        console.error('[WebSocket] Error processing message:', error);
+      }
+    };
 
-  //   // Cleanup when component unmounts
-  //   return () => {
-  //     if (ws.current) {
-  //       ws.current.close();
-  //     }
-  //   };
-  // }, []);
+    // Cleanup when component unmounts
+    return () => {
+      if (ws.current) {
+        ws.current.close();
+      }
+    };
+  }, [isAuthenticated]);
 
   // Initialise audio
   // useEffect(() => {
+  //   if (!isAuthenticated) return;
+
   //   // Request permissions and start recording when component mounts
   //   const initializeAudio = async () => {
   //     const { status } = await Audio.requestPermissionsAsync();
@@ -123,7 +140,7 @@ const VoiceInterface = () => {
   //   };
 
   //   initializeAudio();
-  // }, [])
+  // }, [isAuthenticated])
 
   // Initialise animation
   useEffect(() => {
@@ -396,6 +413,18 @@ const VoiceInterface = () => {
     setIsMuted(!isMuted);
   };
 
+  // Don't render the main interface until authenticated
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <SignInOverlay 
+          visible={showSignIn} 
+          onSignInSuccess={handleSignInSuccess} 
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.orbContainer}>
@@ -409,16 +438,6 @@ const VoiceInterface = () => {
             }
           ]}
         />
-        {/* <Text style={[styles.meterText, { color: wsConnected ? '#4CAF50' : '#F44336' }]}>
-          WebSocket: {wsConnected ? 'Connected' : 'Disconnected'}
-        </Text>
-        <Text style={[styles.meterText, { color: isListening ? '#4CAF50' : '#F44336' }]}>
-          Listening: {isListening ? 'Active' : 'Inactive'}
-        </Text>
-        <Text style={[styles.meterText, { color: isPlaying ? '#4CAF50' : '#F44336' }]}>
-          Audio: {isPlaying ? 'Playing' : 'Not Playing'}
-        </Text> */}
-        <GoogleAuth />
       </View>
 
       <View style={styles.buttonContainer}>
