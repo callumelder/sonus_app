@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Animated, Modal, StyleSheet, View } from 'react-native'
+import { Animated, Modal, StyleSheet, Text, View } from 'react-native'
 import { supabase } from '../utils/supabase'
 import GoogleAuth from './googleauth'
 
@@ -49,6 +49,8 @@ export default function SignInOverlay({ visible, onSignInSuccess }: SignInOverla
     >
       <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
         <View style={styles.container}>
+          <Text style={styles.title}>Welcome to Sonus!</Text>
+          <Text style={styles.subtitle}>Sign in to get started with your voice assistant</Text>
           <GoogleAuth />
         </View>
       </Animated.View>
@@ -69,5 +71,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     minWidth: 280,
+    maxWidth: 320,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
   },
 })
