@@ -12,7 +12,7 @@ export default function GoogleAuth() {
       "https://www.googleapis.com/auth/gmail.modify",
       "https://www.googleapis.com/auth/contacts.readonly"
     ],
-    webClientId: '896784116400-qemrmrjd9cte2jgslso13hav95r6p06f.apps.googleusercontent.com',
+    iosClientId: '896784116400-qemrmrjd9cte2jgslso13hav95r6p06f.apps.googleusercontent.com',
   })
 
   return (
