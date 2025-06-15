@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
-// import GoogleAuth from '../components/googleauth';
+import GoogleAuth from '../components/googleauth';
 
 const VoiceInterface = () => {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -17,105 +17,113 @@ const VoiceInterface = () => {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const waitForFinalResponse = useRef(false);
-  const [showAuth, setShowAuth] = useState(true)
+
+  const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL;
+
+  if (!WEBSOCKET_URL) {
+    throw new Error('Missing WebSocket URL. Please check your .env file for EXPO_PUBLIC_WEBSOCKET_URL.');
+  }
 
 
   // useEffect(() => {
   // if (showAuth) {
+  //   console.log('Google authenticating');
   //   <GoogleAuth />
+  //   console.log('Google authentication finished');
   // }
   // }, [])
 
   // Initialize WebSocket connection
-  useEffect(() => {
-    ws.current = new WebSocket('wss://sonus-production.up.railway.app/ws');
+  // useEffect(() => {
+  //   console.log('Connecting websocket...')
+  //   ws.current = new WebSocket(WEBSOCKET_URL);
   
-    ws.current.onopen = () => {
-      console.log('WebSocket Connected');
+  //   ws.current.onopen = () => {
+  //     console.log('WebSocket Connected');
       
-      // Signal that we're ready to start a conversation
-      if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({
-          type: "start_conversation"
-        }));
-      }
-    };
+  //     // Signal that we're ready to start a conversation
+  //     if (ws.current?.readyState === WebSocket.OPEN) {
+  //       ws.current.send(JSON.stringify({
+  //         type: "start_conversation"
+  //       }));
+  //     }
+  //   };
   
-    ws.current.onclose = () => {
-      console.log('WebSocket Disconnected');
-      setIsListening(false);
-    };
+  //   ws.current.onclose = () => {
+  //     console.log('WebSocket Disconnected');
+  //     setIsListening(false);
+  //   };
   
-    ws.current.onerror = (error) => {
-      console.error('WebSocket Error:', error);
-      setIsListening(false);
-      // Close the connection if it's still open
-      if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
-        ws.current.close();
-      }
-    };
+  //   ws.current.onerror = (error) => {
+  //     console.error('WebSocket Error:', error);
+  //     setIsListening(false);
+  //     // Close the connection if it's still open
+  //     if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
+  //       ws.current.close();
+  //     }
+  //   };
   
-    ws.current.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+  //   ws.current.onmessage = (event) => {
+  //     try {
+  //       const data = JSON.parse(event.data);
         
-        // Log the message type but not the full data content for audio responses
-        if (data.type === 'audio_response') {
-          console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
-        } else {
-          console.log('[WebSocket] Received:', data);
-        }
+  //       // Log the message type but not the full data content for audio responses
+  //       if (data.type === 'audio_response') {
+  //         console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
+  //       } else {
+  //         console.log('[WebSocket] Received:', data);
+  //       }
         
-        // Handle different message types
-        switch (data.type) {
-          case "start_listening":
-            console.log('[WebSocket] Received command to start listening');
-            startRecording();
-            break;
+  //       // Handle different message types
+  //       switch (data.type) {
+  //         case "start_listening":
+  //           console.log('[WebSocket] Received command to start listening');
+  //           startRecording();
+  //           break;
             
-          case "stop_listening":
-            console.log('[WebSocket] Received command to stop listening');
-            stopRecording();
-            stopSpeechProcessor();
-            break;
+  //         case "stop_listening":
+  //           console.log('[WebSocket] Received command to stop listening');
+  //           stopRecording();
+  //           stopSpeechProcessor();
+  //           break;
             
-          case "audio_response":
-            // Handle incoming audio data for playback
-            console.log(`[WebSocket] Received audio data of size: ${data.size || 'unknown'} bytes`);
-            if (data.data && data.data.length > 0) {
-              handleAudioResponse(data);
-            } else {
-              console.warn('[WebSocket] Received empty audio data');
-            }
-            break;
-        }
-      } catch (error) {
-        console.error('[WebSocket] Error processing message:', error);
-      }
-    };
+  //         case "audio_response":
+  //           // Handle incoming audio data for playback
+  //           console.log(`[WebSocket] Received audio data of size: ${data.size || 'unknown'} bytes`);
+  //           if (data.data && data.data.length > 0) {
+  //             handleAudioResponse(data);
+  //           } else {
+  //             console.warn('[WebSocket] Received empty audio data');
+  //           }
+  //           break;
+  //       }
+  //     } catch (error) {
+  //       console.error('[WebSocket] Error processing message:', error);
+  //     }
+  //   };
 
-    // Cleanup when component unmounts
-    return () => {
-      if (ws.current) {
-        ws.current.close();
-      }
-    };
-  }, []);
+  //   // Cleanup when component unmounts
+  //   return () => {
+  //     if (ws.current) {
+  //       ws.current.close();
+  //     }
+  //   };
+  // }, []);
 
   // Initialise audio
-  useEffect(() => {
-    // Request permissions and start recording when component mounts
-    const initializeAudio = async () => {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        console.error('Permission to access microphone was denied');
-        return;
-      }
-      console.log('Microphone permissions granted');
-    };
+  // useEffect(() => {
+  //   // Request permissions and start recording when component mounts
+  //   const initializeAudio = async () => {
+  //     const { status } = await Audio.requestPermissionsAsync();
+  //     if (status !== 'granted') {
+  //       console.error('Permission to access microphone was denied');
+  //       return;
+  //     }
+  //     console.log('Microphone permissions granted');
+  //   };
 
-    initializeAudio();
-  }, [])
+  //   initializeAudio();
+  // }, [])
 
   // Initialise animation
   useEffect(() => {
@@ -410,6 +418,7 @@ const VoiceInterface = () => {
         <Text style={[styles.meterText, { color: isPlaying ? '#4CAF50' : '#F44336' }]}>
           Audio: {isPlaying ? 'Playing' : 'Not Playing'}
         </Text> */}
+        <GoogleAuth />
       </View>
 
       <View style={styles.buttonContainer}>
