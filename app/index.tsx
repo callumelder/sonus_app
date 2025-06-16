@@ -47,75 +47,95 @@ const VoiceInterface = () => {
     setShowSignIn(false);
   };
 
-  // Initialize WebSocket connection - only if authenticated
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    ws.current = new WebSocket(WEBSOCKET_URL);
-  
-    ws.current.onopen = () => {
-      console.log('WebSocket Connected');
+    const initializeWebSocket = async () => {
+      // Get the current session and access token
+      const { data: { session } } = await supabase.auth.getSession();
       
-      // Signal that we're ready to start a conversation
-      if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({
-          type: "start_conversation"
-        }));
+      if (!session?.access_token) {
+        console.error('No access token available');
+        return;
       }
-    };
-  
-    ws.current.onclose = () => {
-      console.log('WebSocket Disconnected');
-      setIsListening(false);
-    };
-  
-    ws.current.onerror = (error) => {
-      console.error('WebSocket Error:', error);
-      setIsListening(false);
-      // Close the connection if it's still open
-      if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
-        ws.current.close();
-      }
-    };
-  
-    ws.current.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+
+      ws.current = new WebSocket(WEBSOCKET_URL);
+
+      ws.current.onopen = () => {
+        console.log('WebSocket Connected');
         
-        // Log the message type but not the full data content for audio responses
-        if (data.type === 'audio_response') {
-          console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
-        } else {
-          console.log('[WebSocket] Received:', data);
-        }
-        
-        // Handle different message types
-        switch (data.type) {
-          case "start_listening":
-            console.log('[WebSocket] Received command to start listening');
-            startRecording();
-            break;
-            
-          case "stop_listening":
-            console.log('[WebSocket] Received command to stop listening');
-            stopRecording();
-            stopSpeechProcessor();
-            break;
-            
-          case "audio_response":
-            // Handle incoming audio data for playback
-            console.log(`[WebSocket] Received audio data of size: ${data.size || 'unknown'} bytes`);
-            if (data.data && data.data.length > 0) {
-              handleAudioResponse(data);
-            } else {
-              console.warn('[WebSocket] Received empty audio data');
+        // Send authentication info first, then start conversation (same as before)
+        if (ws.current?.readyState === WebSocket.OPEN) {
+          console.log("Sending auth to back-end")
+          ws.current.send(JSON.stringify({
+            type: "authenticate",
+            token: session.access_token,
+            user: {
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.full_name || session.user.email
             }
-            break;
+          }));
+
+          ws.current.send(JSON.stringify({
+            type: "start_conversation"
+          }));
         }
-      } catch (error) {
-        console.error('[WebSocket] Error processing message:', error);
-      }
+      };
+
+      ws.current.onclose = () => {
+        console.log('WebSocket Disconnected');
+        setIsListening(false);
+      };
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket Error:', error);
+        setIsListening(false);
+        if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
+          ws.current.close();
+        }
+      };
+
+      // Keep your existing onmessage handler exactly as it was
+      ws.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'audio_response') {
+            console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
+          } else {
+            console.log('[WebSocket] Received:', data);
+          }
+          
+          switch (data.type) {
+            case "start_listening":
+              console.log('[WebSocket] Received command to start listening');
+              startRecording();
+              break;
+              
+            case "stop_listening":
+              console.log('[WebSocket] Received command to stop listening');
+              stopRecording();
+              stopSpeechProcessor();
+              break;
+              
+            case "audio_response":
+              console.log(`[WebSocket] Received audio data of size: ${data.size || 'unknown'} bytes`);
+              if (data.data && data.data.length > 0) {
+                handleAudioResponse(data);
+              } else {
+                console.warn('[WebSocket] Received empty audio data');
+              }
+              break;
+          }
+        } catch (error) {
+          console.error('[WebSocket] Error processing message:', error);
+        }
+      };
     };
+
+    // Call the async function
+    initializeWebSocket();
 
     // Cleanup when component unmounts
     return () => {
@@ -126,21 +146,21 @@ const VoiceInterface = () => {
   }, [isAuthenticated]);
 
   // Initialise audio
-  // useEffect(() => {
-  //   if (!isAuthenticated) return;
+  useEffect(() => {
+    if (!isAuthenticated) return;
 
-  //   // Request permissions and start recording when component mounts
-  //   const initializeAudio = async () => {
-  //     const { status } = await Audio.requestPermissionsAsync();
-  //     if (status !== 'granted') {
-  //       console.error('Permission to access microphone was denied');
-  //       return;
-  //     }
-  //     console.log('Microphone permissions granted');
-  //   };
+    // Request permissions and start recording when component mounts
+    const initializeAudio = async () => {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.error('Permission to access microphone was denied');
+        return;
+      }
+      console.log('Microphone permissions granted');
+    };
 
-  //   initializeAudio();
-  // }, [isAuthenticated])
+    initializeAudio();
+  }, [isAuthenticated])
 
   // Initialise animation
   useEffect(() => {
