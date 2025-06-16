@@ -44,6 +44,12 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.896784116400-qemrmrjd9cte2jgslso13hav95r6p06f"
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice recording."
+        }
       ]
     ],
     "experiments": {
