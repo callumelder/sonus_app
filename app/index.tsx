@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -59,6 +60,16 @@ const VoiceInterface = () => {
         return;
       }
 
+      GoogleSignin.configure({
+        scopes: [
+          "https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/contacts.readonly"
+        ],
+        iosClientId: '896784116400-qemrmrjd9cte2jgslso13hav95r6p06f.apps.googleusercontent.com',
+      })
+
+      const tokens = await GoogleSignin.getTokens()
+
       ws.current = new WebSocket(WEBSOCKET_URL);
 
       ws.current.onopen = () => {
@@ -69,7 +80,7 @@ const VoiceInterface = () => {
           console.log("Sending auth to back-end")
           ws.current.send(JSON.stringify({
             type: "authenticate",
-            token: session.access_token,
+            token: tokens.accessToken,
             user: {
               id: session.user.id,
               email: session.user.email,
