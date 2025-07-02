@@ -20,8 +20,14 @@ const VoiceInterface = () => {
   const lastProcessedSize = useRef(0);
   const [isListening, setIsListening] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const waitForFinalResponse = useRef(false);
+  // const soundRef = useRef<Audio.Sound | null>(null);
+  const [isFinal, setIsFinal] = useState(false);
+  
+  // State for the audio queue
+  const [audioQueue, setAudioQueue] = useState<Array<any>>([]);
+  const [isPlayingQueue, setIsPlayingQueue] = useState(false);
+  const currentlyPlaying = useRef<Audio.Sound | null>(null);
+  const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const WEBSOCKET_URL = process.env.EXPO_PUBLIC_WEBSOCKET_URL;
 
@@ -112,11 +118,11 @@ const VoiceInterface = () => {
         try {
           const data = JSON.parse(event.data);
           
-          if (data.type === 'audio_response') {
-            console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
-          } else {
-            console.log('[WebSocket] Received:', data);
-          }
+          // if (data.type === 'audio_response') {
+          //   console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
+          // } else {
+          //   console.log('[WebSocket] Received:', data);
+          // }
           
           switch (data.type) {
             case "start_listening":
@@ -130,14 +136,17 @@ const VoiceInterface = () => {
               stopSpeechProcessor();
               break;
               
-            case "audio_response":
-              console.log(`[WebSocket] Received audio data of size: ${data.size || 'unknown'} bytes`);
+            case "audio_chunk":
+              // Handle legacy single-response format
               if (data.data && data.data.length > 0) {
-                handleAudioResponse(data);
-              } else {
-                console.warn('[WebSocket] Received empty audio data');
+                handleAudioChunk(data);
               }
               break;
+
+            // case "audio_complete":
+            //   // Set audio complete
+            //   setIsFinal(true);
+            //   break;
           }
         } catch (error) {
           console.error('[WebSocket] Error processing message:', error);
@@ -219,6 +228,25 @@ const VoiceInterface = () => {
     recordingRef.current = recording;
   }, [recording]);
 
+  useEffect(() => {
+    // Only set up processing if there are chunks and we're not already processing
+    if (audioQueue.length > 0 && !isPlayingQueue) {
+      
+      // Clear any existing timeout
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+      
+      // Set a debounced timeout to batch chunks
+      processingTimeoutRef.current = setTimeout(() => {
+        if (audioQueue.length > 0 && !isPlayingQueue) {
+          console.log(`[Audio Queue] Processing batched ${audioQueue.length} chunks`);
+          processAudioQueue();
+        }
+      }, 200); // Wait 200ms for more chunks to arrive
+    }
+  }, [audioQueue, isPlayingQueue]);
+
   const setAudioModeForRecording = async () => {
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: true,
@@ -236,79 +264,197 @@ const VoiceInterface = () => {
     });
   };
 
-  // Handle incoming audio from the backend
-  const handleAudioResponse = async (data: { 
-    data: string, 
-    format: string, 
-    size?: number, 
-    intermediate_response?: boolean 
-  }) => {
-    try {
-      if (data.intermediate_response) {
-        waitForFinalResponse.current = true;
-      }
-      else {
-        waitForFinalResponse.current = false;
-      }
-      // If we're already playing something, we should unload it first
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-      
-      // Decode base64 data
-      const base64Audio = data.data;
-      const uri = `data:audio/${data.format};base64,${base64Audio}`;
-      
-      console.log(`[Audio] Creating sound from ${data.size || 'unknown'} bytes of data`);
-      
-      // Create and load the new sound
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true },
-        (status) => {
-          // Handle playback status updates
-          if (!status.isLoaded) {
-            return;
-          }
-          
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-            
-            // Send completion notification to backend if requested
-            if (waitForFinalResponse.current === false && ws.current?.readyState === WebSocket.OPEN) {
-              console.log('[Audio] Sending playback completion notification');
-              ws.current.send(JSON.stringify({
-                type: 'playback_completed'
-              }));
-            }
-            
-            // Clean up after playback
-            if (soundRef.current) {
-              soundRef.current.unloadAsync();
-              soundRef.current = null;
-            }
-          }
+  // Play a single audio chunk
+  const playAudioChunk = async (audioData: any): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Stop any currently playing audio
+        if (currentlyPlaying.current) {
+          await currentlyPlaying.current.unloadAsync();
+          currentlyPlaying.current = null;
         }
-      );
-      
-      // Store reference and update UI
-      soundRef.current = sound;
-      setIsPlaying(true);
-      
-      console.log('[Audio] Started playback');
-      
-    } catch (error) {
-      console.error('[Audio] Error playing audio:', error);
-      
-      // Send completion notification even on error if requested
-      if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({
-          type: 'playback_completed'
-        }));
+
+        // Create URI from base64 data
+        const uri = `data:audio/${audioData.format};base64,${audioData.data}`;
+
+        // Create and play the sound
+        const { sound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: true },
+          (status) => {
+            if (!status.isLoaded) return;
+
+            if (status.didJustFinish) {
+              console.log('[Audio Queue] Chunk finished playing');
+              // Clean up
+              if (currentlyPlaying.current) {
+                currentlyPlaying.current.unloadAsync();
+                currentlyPlaying.current = null;
+              }
+              resolve(); // Resolve the promise when done
+            }
+          }
+        );
+
+        currentlyPlaying.current = sound;
+        setIsPlaying(true);
+
+      } catch (error) {
+        console.error('[Audio Queue] Error playing chunk:', error);
+        reject(error);
       }
+    });
+  };
+
+  // Process the queue sequentially
+  const processAudioQueue = async () => {
+    if (isPlayingQueue) {
+      console.log('[Audio Queue] Already processing queue, skipping');
+      return;
+    }
+
+    console.log(`[Audio Queue] Starting to process ${audioQueue.length} chunks`);
+    setIsPlayingQueue(true);
+
+    // Create a copy of the queue and clear the original
+    const queueToProcess = [...audioQueue];
+    setAudioQueue([]);
+
+    try {
+      // Play each chunk sequentially
+      for (let i = 0; i < queueToProcess.length; i++) {
+        const chunk = queueToProcess[i];
+        console.log(`[Audio Queue] Playing chunk ${i + 1}/${queueToProcess.length}`);
+        
+        await playAudioChunk(chunk);
+      }
+
+      console.log('[Audio Queue] Finished processing all chunks');
+
+    } catch (error) {
+      console.error('[Audio Queue] Error processing queue:', error);
+    } finally {
+      setIsPlayingQueue(false);
+      setIsPlaying(false);
     }
   };
+
+  // Add chunks to the queue
+  const addToAudioQueue = (audioData: any) => {
+    console.log(`[Audio Queue] Adding chunk: ${audioData.size} bytes`);
+    setAudioQueue(prev => [...prev, audioData]);
+  };
+
+  // Clear the queue
+  const clearAudioQueue = () => {
+    console.log('[Audio Queue] Clearing queue');
+    setAudioQueue([]);
+    setIsPlayingQueue(false);
+    
+    // Clear any pending processing timeout
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+      processingTimeoutRef.current = null;
+    }
+    
+    // Stop any currently playing audio
+    if (currentlyPlaying.current) {
+      currentlyPlaying.current.unloadAsync();
+      currentlyPlaying.current = null;
+    }
+  };
+
+  // Handle incoming audio chunks
+  const handleAudioChunk = (data: { 
+    format: string, 
+    data: string, 
+    size: number, 
+    is_final?: boolean 
+  }) => {
+    console.log(`[Audio Queue] Received chunk: ${data.size} bytes`);
+    addToAudioQueue(data);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearAudioQueue();
+    };
+  }, []);
+
+  // // Handle incoming audio from the backend
+  // const handleAudioResponse = async (data: { 
+  //   data: string, 
+  //   format: string, 
+  //   size?: number, 
+  //   intermediate_response?: boolean 
+  // }) => {
+  //   try {
+  //     if (data.intermediate_response) {
+  //       waitForFinalResponse.current = true;
+  //     }
+  //     else {
+  //       waitForFinalResponse.current = false;
+  //     }
+  //     // If we're already playing something, we should unload it first
+  //     if (soundRef.current) {
+  //       await soundRef.current.unloadAsync();
+  //       soundRef.current = null;
+  //     }
+      
+  //     // Decode base64 data
+  //     const base64Audio = data.data;
+  //     const uri = `data:audio/${data.format};base64,${base64Audio}`;
+      
+  //     console.log(`[Audio] Creating sound from ${data.size || 'unknown'} bytes of data`);
+      
+  //     // Create and load the new sound
+  //     const { sound } = await Audio.Sound.createAsync(
+  //       { uri },
+  //       { shouldPlay: true },
+  //       (status) => {
+  //         // Handle playback status updates
+  //         if (!status.isLoaded) {
+  //           return;
+  //         }
+          
+  //         if (status.didJustFinish) {
+  //           setIsPlaying(false);
+            
+  //           // Send completion notification to backend if requested
+  //           if (waitForFinalResponse.current === false && ws.current?.readyState === WebSocket.OPEN) {
+  //             console.log('[Audio] Sending playback completion notification');
+  //             ws.current.send(JSON.stringify({
+  //               type: 'playback_completed'
+  //             }));
+  //           }
+            
+  //           // Clean up after playback
+  //           if (soundRef.current) {
+  //             soundRef.current.unloadAsync();
+  //             soundRef.current = null;
+  //           }
+  //         }
+  //       }
+  //     );
+      
+  //     // Store reference and update UI
+  //     soundRef.current = sound;
+  //     setIsPlaying(true);
+      
+  //     console.log('[Audio] Started playback');
+      
+  //   } catch (error) {
+  //     console.error('[Audio] Error playing audio:', error);
+      
+  //     // Send completion notification even on error if requested
+  //     if (ws.current?.readyState === WebSocket.OPEN) {
+  //       ws.current.send(JSON.stringify({
+  //         type: 'playback_completed'
+  //       }));
+  //     }
+  //   }
+  // };
 
   const startRecording = async () => {
     try {
@@ -367,7 +513,7 @@ const VoiceInterface = () => {
         // Use recordingRef to access the current recording value
         if (recordingRef.current && ws.current?.readyState === WebSocket.OPEN) {
           try {
-            const uri = await recordingRef.current.getURI();
+            const uri = recordingRef.current.getURI();
             if (uri) {
               const response = await fetch(uri);
               const fullAudioData = await response.arrayBuffer();
