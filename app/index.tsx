@@ -143,10 +143,10 @@ const VoiceInterface = () => {
               }
               break;
 
-            // case "audio_complete":
-            //   // Set audio complete
-            //   setIsFinal(true);
-            //   break;
+            case "audio_complete":
+              // Set audio complete
+              setIsFinal(true);
+              break;
           }
         } catch (error) {
           console.error('[WebSocket] Error processing message:', error);
@@ -227,6 +227,14 @@ const VoiceInterface = () => {
   useEffect(() => {
     recordingRef.current = recording;
   }, [recording]);
+
+  // Start listening
+  useEffect(() => {
+    if (isFinal === true) {
+      startRecording();
+      setIsFinal(false);
+    }
+  }, [isFinal]);
 
   useEffect(() => {
     // Only set up processing if there are chunks and we're not already processing
