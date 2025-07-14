@@ -125,10 +125,10 @@ const VoiceInterface = () => {
           // }
           
           switch (data.type) {
-            case "start_listening":
-              console.log('[WebSocket] Received command to start listening');
-              startRecording();
-              break;
+            // case "start_listening":
+            //   console.log('[WebSocket] Received command to start listening');
+            //   startRecording();
+            //   break;
               
             case "stop_listening":
               console.log('[WebSocket] Received command to stop listening');
@@ -230,11 +230,12 @@ const VoiceInterface = () => {
 
   // Start listening
   useEffect(() => {
-    if (isFinal === true) {
+    if (isFinal === true && !isPlayingQueue && !isPlaying) {
+      console.log('[Audio Queue] All audio finished, starting recording');
       startRecording();
       setIsFinal(false);
     }
-  }, [isFinal]);
+  }, [isFinal, isPlayingQueue, isPlaying]);
 
   useEffect(() => {
     // Only set up processing if there are chunks and we're not already processing
