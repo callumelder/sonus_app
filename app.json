@@ -50,7 +50,8 @@
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice recording."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
