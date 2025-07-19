@@ -72,8 +72,11 @@ const VoiceInterface = () => {
 
       ws.current = new WebSocket(WEBSOCKET_URL);
 
-      ws.current.onopen = () => {
+      ws.current.onopen = async () => {
         console.log('WebSocket Connected');
+
+        // Set audio mode for playback first
+        await setAudioModeForPlayback();
         
         // Send authentication info first, then start conversation (same as before)
         if (ws.current?.readyState === WebSocket.OPEN) {
