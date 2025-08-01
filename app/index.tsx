@@ -115,12 +115,6 @@ const VoiceInterface = () => {
         try {
           const data = JSON.parse(event.data);
           
-          if (data.type === 'audio_response') {
-            console.log(`[WebSocket] Received ${data.type}, size: ${data.size || 'unknown'}`);
-          } else {
-            console.log('[WebSocket] Received:', data);
-          }
-          
           switch (data.type) {
             case "start_listening":
               console.log('[WebSocket] Received command to start listening');
